@@ -1,0 +1,96 @@
+From c0c302d4162e4a7e4fcbaa26d66559731e89ae89 Mon Sep 17 00:00:00 2001
+From: Russell Hewett <rhewett@nvidia.com>
+Date: Tue, 15 Sep 2026 23:47:33 -0700
+Subject: [PATCH] fix(telemetry): derive plain worker run identity when no
+ launcher supplies it
+
+Signed-off-by: Russell Hewett <rhewett@nvidia.com>
+---
+ megatron/core/telemetry/resource_attrs.py     |  6 +++
+ .../telemetry/test_resource_attrs.py          | 41 +++++++++++++++++++
+ 2 files changed, 47 insertions(+)
+
+diff --git a/megatron/core/telemetry/resource_attrs.py b/megatron/core/telemetry/resource_attrs.py
+index b47b6ab15b..c375cf8a43 100644
+--- a/megatron/core/telemetry/resource_attrs.py
++++ b/megatron/core/telemetry/resource_attrs.py
+@@ -8,11 +8,13 @@ from importlib.metadata import PackageNotFoundError, version
+ import torch
+ from nemo.lens.resources import detect_gpu, detect_kubernetes, detect_slurm
+ from nemo.lens.resources.attributes import get_otel_resource_attributes
++from nemo.lens.resources.slurm import derive_nv_dl_run_uuid
+ from nemo.lens.semconv import (
+     NV_DL_LOCAL_RANK,
+     NV_DL_PROVIDER_NAME,
+     NV_DL_RANK,
+     NV_DL_ROLE,
++    NV_DL_RUN_UUID,
+     NV_DL_SOFTWARE_CUDA,
+     NV_DL_SOFTWARE_NCCL,
+     NV_DL_SOFTWARE_TORCH,
+@@ -141,6 +143,10 @@ def compose_telemetry_resource_attrs(args):
+     """
+     current = normalize_resource_attributes(get_otel_resource_attributes())
+     defaults = build_telemetry_resource_attrs(args)
++    # Plain torchrun has no NVRx carrier. Derive its attempt identity here,
++    # after worker spawn supplies TORCHELASTIC_RESTART_COUNT. A launcher-owned
++    # UUID (including NVRx's cycle identity) retains precedence via current.
++    _set(defaults, NV_DL_RUN_UUID, derive_nv_dl_run_uuid())
+     defaults.update(detect_gpu(local_rank=getattr(args, 'local_rank', None)))
+     service_name = (
+         _nonempty_text(getattr(args, 'otel_service_name', None))
+diff --git a/tests/unit_tests/telemetry/test_resource_attrs.py b/tests/unit_tests/telemetry/test_resource_attrs.py
+index 09b5184bf9..bbe2a65b80 100644
+--- a/tests/unit_tests/telemetry/test_resource_attrs.py
++++ b/tests/unit_tests/telemetry/test_resource_attrs.py
+@@ -109,6 +109,47 @@ def test_target_derivations_handle_missing_invalid_and_explicit_values(
+     assert attrs.get("nv.dl.training.target.train_tokens") == tokens
+ 
+ 
++@pytest.mark.parametrize("array", [False, True])
++@pytest.mark.parametrize("restart", [0, 1])
++def test_plain_trainer_derives_worker_attempt_identity(monkeypatch, array, restart):
++    resource_attrs = _load_resource_attrs(monkeypatch)
++    monkeypatch.setattr(resource_attrs, "_software_attributes", lambda: {})
++    monkeypatch.setattr(resource_attrs, "detect_gpu", lambda **_kwargs: {})
++    monkeypatch.delenv("OTEL_RESOURCE_ATTRIBUTES", raising=False)
++    monkeypatch.setenv("SLURM_CLUSTER_NAME", "test-cluster")
++    monkeypatch.setenv("SLURM_JOB_ID", "123")
++    monkeypatch.setenv("TORCHELASTIC_RESTART_COUNT", str(restart))
++    for key in ("SLURM_ARRAY_JOB_ID", "SLURM_ARRAY_TASK_ID", "SLURM_RESTART_COUNT"):
++        monkeypatch.delenv(key, raising=False)
++    if array:
++        monkeypatch.setenv("SLURM_ARRAY_JOB_ID", "120")
++        monkeypatch.setenv("SLURM_ARRAY_TASK_ID", "3")
++    first = resource_attrs.compose_telemetry_resource_attrs(_args(rank=0))
++    second = resource_attrs.compose_telemetry_resource_attrs(_args(rank=1))
++    expected = resource_attrs.derive_nv_dl_run_uuid()
++    assert first["nv.dl.run.uuid"] == second["nv.dl.run.uuid"] == expected
++    monkeypatch.setenv("TORCHELASTIC_RESTART_COUNT", str(restart + 1))
++    restarted = resource_attrs.compose_telemetry_resource_attrs(_args())
++    assert restarted["nv.dl.run.uuid"] != expected
++    monkeypatch.setenv("OTEL_RESOURCE_ATTRIBUTES", "nv.dl.run.uuid=nvrx-cycle-owned")
++    inherited = resource_attrs.compose_telemetry_resource_attrs(_args())
++    assert inherited["nv.dl.run.uuid"] == "nvrx-cycle-owned"
++
++
++def test_local_trainer_without_attempt_identity_does_not_invent_uuid(monkeypatch):
++    resource_attrs = _load_resource_attrs(monkeypatch)
++    monkeypatch.setattr(resource_attrs, "_software_attributes", lambda: {})
++    monkeypatch.setattr(resource_attrs, "detect_gpu", lambda **_kwargs: {})
++    for key in (
++        "OTEL_RESOURCE_ATTRIBUTES",
++        "SLURM_JOB_ID",
++        "SLURM_ARRAY_JOB_ID",
++        "TORCHELASTIC_RUN_ID",
++    ):
++        monkeypatch.delenv(key, raising=False)
++    assert "nv.dl.run.uuid" not in resource_attrs.compose_telemetry_resource_attrs(_args())
++
++
+ def test_composes_inherited_detected_gpu_and_trainer_identity_once(monkeypatch):
+     resource_attrs = _load_resource_attrs(monkeypatch)
+     monkeypatch.setattr(resource_attrs, "_software_attributes", lambda: {})
+-- 
+2.39.5 (Apple Git-154)
+
