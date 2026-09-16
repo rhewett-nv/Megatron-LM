@@ -1,0 +1,73 @@
+From 7753701935800d6684a4134258da65d151496d98 Mon Sep 17 00:00:00 2001
+From: Russell Hewett <rhewett@nvidia.com>
+Date: Tue, 15 Sep 2026 23:29:47 -0700
+Subject: [PATCH] fix(telemetry): use live iteration state for parameter norm
+ reporting
+
+Signed-off-by: Russell Hewett <rhewett@nvidia.com>
+---
+ megatron/training/training.py                 |  4 ++-
+ .../telemetry/test_trace_lifecycle.py         | 32 +++++++++++++++++++
+ 2 files changed, 35 insertions(+), 1 deletion(-)
+
+diff --git a/megatron/training/training.py b/megatron/training/training.py
+index 344baccdd6..2c89a79a72 100644
+--- a/megatron/training/training.py
++++ b/megatron/training/training.py
+@@ -5065,7 +5065,9 @@ def train(
+                 loss_scale = 1.0
+             params_norm = None
+ 
+-            if _should_compute_params_norm(args, iteration, is_first_iteration):
++            if _should_compute_params_norm(
++                args, current_iteration, iteration_span_state.is_first
++            ):
+                 # Cross-rank param L2 norm (--log-params-norm): a full-model reduction
+                 # + all-reduce that BLOCKS the training loop (~1.5s cold on the
+                 # first iteration, ~10ms steady), unlike passive monitors.
+diff --git a/tests/unit_tests/telemetry/test_trace_lifecycle.py b/tests/unit_tests/telemetry/test_trace_lifecycle.py
+index 4c4b6af550..e73033bb64 100644
+--- a/tests/unit_tests/telemetry/test_trace_lifecycle.py
++++ b/tests/unit_tests/telemetry/test_trace_lifecycle.py
+@@ -655,6 +655,38 @@ def test_current_iteration_identity_is_reused_across_the_loop_pass():
+     )
+ 
+ 
++@pytest.mark.parametrize(
++    "step,is_first,log_params_norm,tensorboard_dir,expected",
++    [
++        (200001, True, True, None, True),
++        (200002, False, True, None, False),
++        (200010, False, True, None, True),
++        (200005, False, True, "tensorboard", True),
++        (200005, False, True, None, False),
++        (200001, True, False, None, False),
++    ],
++)
++def test_parameter_norm_reporting_uses_live_loop_state(
++    step, is_first, log_params_norm, tensorboard_dir, expected
++):
++    """Exercise the production call with only the iteration state the loop owns."""
++    train = _function(TRAINING_PATH, "train")
++    call = _calls(train, "_should_compute_params_norm")[0]
++    helper = _function(TRAINING_PATH, "_should_compute_params_norm")
++    namespace = {
++        "args": types.SimpleNamespace(
++            log_params_norm=log_params_norm,
++            log_interval=10,
++            tensorboard_dir=tensorboard_dir,
++            tensorboard_log_interval=5,
++        ),
++        "current_iteration": step,
++        "iteration_span_state": types.SimpleNamespace(is_first=is_first),
++    }
++    exec(compile(ast.Module(body=[helper], type_ignores=[]), TRAINING_PATH, "exec"), namespace)
++    assert eval(compile(ast.Expression(call), TRAINING_PATH, "eval"), namespace) is expected
++
++
+ def test_dummy_skip_uses_skipped_iteration_span_without_consuming_first_state():
+     train = _function(TRAINING_PATH, "train")
+     dummy_call = _calls(train, "dummy_train_step")[0]
+-- 
+2.39.5 (Apple Git-154)
+
