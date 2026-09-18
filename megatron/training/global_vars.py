@@ -33,6 +33,7 @@ _GLOBAL_TIMERS = None
 _GLOBAL_ENERGY_MONITOR = None
 _GLOBAL_SIGNAL_HANDLER = None
 _GLOBAL_TELEMETRY_HANDLE = None
+_GLOBAL_TELEMETRY_SETUP_TIMESTAMPS = (None, None)
 
 def get_args():
     """Return arguments."""
@@ -93,6 +94,11 @@ def get_signal_handler():
 def get_telemetry():
     """Return the telemetry handle. It can be None so no need to check if initialized."""
     return _GLOBAL_TELEMETRY_HANDLE
+
+
+def get_telemetry_setup_timestamps():
+    """Return the start and end timestamps for the latest telemetry setup call."""
+    return _GLOBAL_TELEMETRY_SETUP_TIMESTAMPS
 
 
 def _shutdown_telemetry():
@@ -190,7 +196,7 @@ def set_global_variables(args, build_tokenizer=True):
     _set_adlr_autoresume(args)
     _set_timers(args)
     _set_energy_monitor(args)
-    _set_telemetry(args)
+    _set_telemetry_with_timestamps(args)
     _set_train_state()
 
     if args.enable_experimental:
@@ -391,6 +397,16 @@ def _set_telemetry(args):
     from megatron.core.telemetry import telemetry as _otel
 
     _GLOBAL_TELEMETRY_HANDLE = _otel.setup(args)
+
+
+def _set_telemetry_with_timestamps(args):
+    """Capture the full telemetry setup interval without emitting a separate signal."""
+    global _GLOBAL_TELEMETRY_SETUP_TIMESTAMPS
+    setup_start = time.time()
+    try:
+        _set_telemetry(args)
+    finally:
+        _GLOBAL_TELEMETRY_SETUP_TIMESTAMPS = (setup_start, time.time())
 
 
 def destroy_global_vars():
