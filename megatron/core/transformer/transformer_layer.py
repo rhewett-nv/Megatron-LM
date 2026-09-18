@@ -771,7 +771,7 @@ class TransformerLayer(GraphableMegatronModule, BaseTransformerLayer, TwoStageAt
             self._set_proj_residual(residual)
 
         nvtx_range_push(suffix="self_attention")
-        with _otel.managed_span(_otel.DETAIL, 'megatron.layer.self_attention'):
+        with _otel.managed_span(_otel.DETAIL, _otel.SPAN_LAYER_SELF_ATTENTION):
             attention_output_with_bias = self.self_attention(
                 input_layernorm_output,
                 attention_mask=attention_mask,
@@ -813,7 +813,7 @@ class TransformerLayer(GraphableMegatronModule, BaseTransformerLayer, TwoStageAt
         input_layernorm_output, residual, attn_state = self._run_input_layernorm(hidden_states)
 
         nvtx_range_push(suffix="self_attention")
-        with _otel.managed_span(_otel.DETAIL, 'megatron.layer.self_attention'):
+        with _otel.managed_span(_otel.DETAIL, _otel.SPAN_LAYER_SELF_ATTENTION):
             attention_intermediate = self.self_attention.forward_pre_attn_and_core_attn(
                 input_layernorm_output,
                 attention_mask=attention_mask,
@@ -959,10 +959,10 @@ class TransformerLayer(GraphableMegatronModule, BaseTransformerLayer, TwoStageAt
         self-attention, cross-attention (if applicable), and feed-forward operations.
         """
         with _otel.managed_span(
-            _otel.DETAIL, 'megatron.layer.forward', **{'megatron.layer_number': self.layer_number}
+            _otel.DETAIL, _otel.SPAN_LAYER_FORWARD, **{_otel.LAYER_NUMBER: self.layer_number}
         ):
             hidden_states, context = self._forward_attention(*args, **kwargs)
-            with _otel.managed_span(_otel.DETAIL, 'megatron.layer.mlp'):
+            with _otel.managed_span(_otel.DETAIL, _otel.SPAN_LAYER_MLP):
                 output = self._forward_mlp(
                     hidden_states,
                     kwargs.get("inference_context", None),

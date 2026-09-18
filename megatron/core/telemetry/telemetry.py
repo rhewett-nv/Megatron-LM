@@ -55,6 +55,18 @@ SPAN_TRAINING_LOG = "nv.mlm.train.log"
 SPAN_TRAINING_FORWARD_PRE_HOOK = "nv.mlm.train.forward_pre_hook"
 SPAN_TRAINING_EVALUATE = "nv.dl.training.evaluate"
 SPAN_TRAINING_EVALUATE_STEP = "nv.dl.training.evaluate.step"
+SPAN_MICROBATCH_FORWARD = "nv.mcore.microbatch.forward"
+SPAN_MICROBATCH_BACKWARD = "nv.mcore.microbatch.backward"
+SPAN_P2P_RECV_FORWARD = "nv.mcore.p2p.recv_forward"
+SPAN_P2P_RECV_BACKWARD = "nv.mcore.p2p.recv_backward"
+SPAN_P2P_SEND_FORWARD = "nv.mcore.p2p.send_forward"
+SPAN_P2P_SEND_BACKWARD = "nv.mcore.p2p.send_backward"
+SPAN_GRAD_SYNC_START = "nv.mcore.grad_sync.start"
+SPAN_GRAD_SYNC_FINISH = "nv.mcore.grad_sync.finish"
+SPAN_LAYER_FORWARD = "nv.mcore.layer.forward"
+SPAN_LAYER_SELF_ATTENTION = "nv.mcore.layer.self_attention"
+SPAN_LAYER_MLP = "nv.mcore.layer.mlp"
+SPAN_LAYER_MAMBA = "nv.mcore.layer.mamba"
 
 # Canonical span attribute names.
 TRAINING_STEP = "nv.dl.training.step"
@@ -65,9 +77,14 @@ TRAINING_EVALUATE_ITERATION = "nv.dl.training.evaluate.iteration"
 TRAINING_EVALUATE_ITERATION_COUNT = "nv.dl.training.evaluate.iteration_count"
 GPU_SNIFF_TAG = "nv.dl.resiliency.gpu_sniff.tag"
 MEMORY_RECLAIM_OPERATION = "nv.mcore.memory.reclaim.operation"
+GRAD_SYNC_START_SITE = "nv.mcore.grad_sync.start.site"
+LAYER_NUMBER = "nv.mcore.layer.number"
 
 MEMORY_RECLAIM_GC_COLLECT = "gc_collect"
 MEMORY_RECLAIM_FREE_OVERLAP_BUFFERS = "free_overlap_buffers"
+GRAD_SYNC_SITE_INTERLEAVED_BACKWARD = "interleaved_backward"
+GRAD_SYNC_SITE_INTERLEAVED_COOLDOWN = "interleaved_cooldown"
+GRAD_SYNC_SITE_NON_INTERLEAVED_COOLDOWN = "non_interleaved_cooldown"
 
 try:
     from nemo.lens import SpanRegistry as _SpanRegistry
