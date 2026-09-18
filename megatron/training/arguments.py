@@ -2711,18 +2711,6 @@ def _add_logging_args(parser):
         default=None,
         help='Override OTEL_SERVICE_NAME for this training run.',
     )
-    otel_group.add_argument(
-        '--otel-span-groups',
-        type=str,
-        default=None,
-        help='Comma-separated span-group spec controlling which OTel '
-        'instrumentation boundaries are active.  Accepts preset keywords '
-        '("default", "per_step", "full", "all") or individual group names '
-        '("job", "checkpoint", "evaluate", "model_init", "load_checkpoint", '
-        '"step", "forward_backward", "optimizer", "microbatch"), or a mix.  '
-        'Defaults to "default" (coarse job/checkpoint/evaluate spans only).  '
-        'Equivalent to MEGATRON_OTEL_SPAN_GROUPS env var.',
-    )
 
     return parser
 
